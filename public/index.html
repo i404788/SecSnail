@@ -1,0 +1,13 @@
+<html>
+<head>
+<script>
+	if ('serviceWorker' in navigator) {
+		  window.addEventListener('load', () => {
+			      navigator.serviceWorker.register('/sw.js');
+			    });
+	} else {
+		// TODO: notify user
+	}
+</script>
+</head>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "SecSnail",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/i404788/SecSnail.git",
+  "author": "Casper <casper@devdroplets.com>",
+  "license": "MPL",
+  "dependencies": {
+    "elliptic": "^6.5.3"
+  }
+}
