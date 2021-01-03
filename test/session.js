@@ -1,15 +1,8 @@
 const session = require('../src/session')
 const util = require('../src/util')
 
-function throwIfError(v)
-{
-  if (b instanceof Error) throw b
-}
-
-function assert(v, e)
-{
-  throwIfError(v || new Error(e))
-}
+function throwIfError(v){ if (v instanceof Error) throw v }
+function assert(v, e) { throwIfError(v || new Error(e)) }
 
 function testx3dh()
 {
@@ -37,8 +30,6 @@ function testsession()
   const pt = asession.decrypt(ct)
   console.log(`${ct} ${pt}`)
 }
-
-
 
 const totest = {testx3dh, testsession}
 for (const f in totest) {
