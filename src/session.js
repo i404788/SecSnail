@@ -1,7 +1,6 @@
 'use strict'
 
 const crypto = require('crypto')
-const nacl = require('tweetnacl')
 const util = require('./util')
 
 const SALTS = {'RK': Buffer.alloc(32).fill(1), 'NHK': {}, 'HK': Buffer.alloc(32).fill(4)}
@@ -10,7 +9,7 @@ const SALTS = {'RK': Buffer.alloc(32).fill(1), 'NHK': {}, 'HK': Buffer.alloc(32)
  * This class represents a Double Ratchet session between two peers.
  */
 class Session {
-  constructor (state) {
+  constructor (state = {}) {
     this.ad = state.ad || null
     this.info = state.info || null
 
@@ -44,31 +43,37 @@ class Session {
   static fromX3DH(recv = false, IKeys = null, HKeys = null){
     let R = null
     if (!recv)
-	R = util.genKeyPair()
-    const { IKpub, IKpriv } = IKeys || util.genKeyPair()
-    const { HKpub, HKpriv } = HKeys || util.genKeyPair()
+	    R = util.genKeyPair()
+    const { pubKey: IKpub, privKey: IKpriv } = IKeys || util.genKeyPair()
+    const { pubKey: HKpub, privKey: HKpriv } = HKeys || util.genKeyPair()
 
-    const resolve = ({IKr, HKr, Rr}) => {
-	const mkey = util.x3dh({Ia: IKpriv, Ha: HKpriv, Ibp: IKr, Hbp: HKr, recv})
-	const sess = new Session()
-	// TODO: gen secKeys
-	sess.init({ad: Buffer.concat([IKpub, IKr]), info: 'secsnail', keyPair: R, secKeys: null});
-	return sess 
+    const resolve = ({IKr, HKr, Rr = null}) => {
+      // console.log({Ia: IKpriv.toBuffer().toString('hex'), Ha: HKpriv.toBuffer().toString('hex'), Ibp: IKr, Hbp: HKr, recv, length: 96})
+      let mkey = util.x3dh({Ia: IKpriv, Ha: HKpriv, Ibp: IKr, Hbp: HKr, recv, length: 96})
+      // console.log(mkey)
+      const secKeys = []
+
+      for (let i = 0; i < 3; i++) {
+        secKeys.push(mkey.slice(0, 32))
+        mkey = mkey.slice(32)
+      }
+      
+      let ad = null
+      if (recv)
+        ad = Buffer.concat([Buffer.from(IKpub, 'hex'), Buffer.from(IKr, 'hex')])
+      else
+        ad = Buffer.concat([Buffer.from(IKr, 'hex'), Buffer.from(IKpub, 'hex')])
+
+      const sess = new Session()
+      sess.init({ad, info: 'secsnail', keyPair: R, peerKey: Rr, secKeys});
+      return sess 
     }
 
     if (!recv)
-	return [IKpub, HKpub, R.pubKey], resolve
+     return [{IKr: IKpub, HKr: HKpub, Rr: R.pubKey}, resolve]
     else
-	return [IKpub, HKpub], resolve
+      return [{IKr: IKpub, HKr: HKpub}, resolve]
   }
-
-  static fromMKey(mkey, Rr = null, R = null){
-    const recv = !!Rr
-    this.rootKey = util.hkdf({ikm: mkey, salt: SALTS['RK'], length: 32, info: Buffer.from('RootKey')})
-    this.sendNextHeaderKey = util.hkdf({ikm: mkey, salt: SALTS['NHK'][recv], length: 32)})
-    this.recvNextHeaderKey = util.hkdf({ikm: mkey, salt: SALTS['NHK'][!recv], length: 32)})
-
-  } 
 
   /**
    * Initialize session with keys, secrets, and additional info.
@@ -276,7 +281,6 @@ class Session {
     }
 
     const ciphertext = payload.slice(0, -32)
-
     return util.decrypt({ ciphertext, iv, key: encKey })
   }
 

@@ -1,7 +1,7 @@
 'use strict'
 
 const crypto = require('crypto')
-const EC = require('eliptic').ec
+const EC = require('elliptic').ec
 const ec = new EC('curve25519')
 
 const encrypt = ({ iv, key, plaintext }) => {
@@ -22,8 +22,8 @@ const decrypt = ({ ciphertext, iv, key }) => {
 
 const genKeyPair = () => {
   const kp = ec.genKeyPair();
-  const pubKey = ec.getPublic().encode('hex')
-  const privKey = ec.getPrivate()
+  const pubKey = kp.getPublic().encode('hex')
+  const privKey = kp.getPrivate()
   return { pubKey, privKey }
 }
 
@@ -37,13 +37,13 @@ const hmac = ({ data, key }) => {
 const hkdf = ({ ikm, info, length, salt }) => {
   salt = salt || Buffer.alloc(32)
   info = info || Buffer.alloc(0)
-  const key = hmac({ data: ikm, key: salt })
+  const key = hmac({ data: ikm, key: Buffer.from(salt) })
 
   let t = Buffer.alloc(0)
   let okm = Buffer.alloc(0)
 
   for (let i = 0; i < Math.ceil(length / 32); i++) {
-    const data = Buffer.concat([t, info, Buffer.from([1 + i])])
+    const data = Buffer.concat([t, Buffer.from(info), Buffer.from([1 + i])])
     t = hmac({ data, key })
     okm = Buffer.concat([okm, t])
   }
@@ -52,21 +52,21 @@ const hkdf = ({ ikm, info, length, salt }) => {
 }
 
 const dh = (a, bp) => {
-  if (bp instanceof Buffer)
-    bp = bp.toString('hex')
-  if (typeof bp === 'string')
-    bp = ec.keyFromPublic(bp, 'hex')
+  // Note: without hex it will decode arbitrarily
+  bp = ec.keyFromPublic(bp, 'hex').getPublic()
+  a = ec.keyFromPrivate(a, 'hex')
 
   return a.derive(bp).toBuffer()
 }
 
-const x3dh = ({Ia, Ha, Ibp, Hbp, recv}) => {
+const x3dh = ({Ia, Ha, Ibp, Hbp, recv, length = 32}) => {
   if (recv) {
+    // TODO: fix dh/x3dh (guess either combination or the asymetric dh)
     const seed = Buffer.concat([dh(Ia, Hbp), dh(Ha, Ibp), dh(Ha, Hbp)])
-    return hkdf({ikm: seed, salt: Buffer.alloc(seed.byteLength), length: 32, info: Buffer.from('x3dh')}) 
+    return hkdf({ikm: seed, salt: Buffer.alloc(seed.byteLength), length, info: Buffer.from('x3dh')}) 
   } else {
     const seed = Buffer.concat([dh(Ha, Ibp), dh(Ia, Hbp), dh(Ha, Hbp)])
-    return hkdf({ikm: seed, salt: Buffer.alloc(seed.byteLength), length: 32, info: Buffer.from('x3dh')}) 
+    return hkdf({ikm: seed, salt: Buffer.alloc(seed.byteLength), length, info: Buffer.from('x3dh')}) 
   }
 }
 
@@ -80,7 +80,7 @@ const isArrayPublicKeys = x => isArray(x) && x.every(isPublicKey)
 const isBufferOrString = x => isBuffer(x) || isString(x)
 
 const isPublicKey = x => {
-  if (typeof x !== 'string)
+  if (typeof x !== 'string')
     return false
 
   return x.length === 64
@@ -114,5 +114,6 @@ module.exports = {
   hkdf,
   x3dh,
   hmac,
+  dh,
   validate
 }
